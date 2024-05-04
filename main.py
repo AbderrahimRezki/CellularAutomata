@@ -3,6 +3,8 @@ import pygame
 from dataclasses import dataclass
 from random import randint, sample
 
+pygame.init()
+
 @dataclass
 class Settings:
     window_title: str
@@ -18,6 +20,10 @@ class Settings:
 
     alive_color: tuple = (255, 255, 255)
     bg_color: tuple = (0, 0, 0)
+
+    font_path: str = "fonts/prstart.ttf"
+    font_color: tuple = (255, 255, 255)
+    font_size: int = 32
 
     fps: int = 60
     
@@ -45,8 +51,15 @@ class Game:
         self.alive_color = self.settings.alive_color
         self.bg_color = self.settings.bg_color
 
+        self.font_size = settings.font_size
+        self.font = pygame.freetype.Font(settings.font_path, settings.font_size)
+
+        self.font_color = settings.font_color
+
         self.fps = settings.fps
         self.clock = pygame.time.Clock()
+
+        self.is_paused = True
 
         self.state = self.initialize_state()
         pygame.display.set_caption(settings.window_title)
@@ -70,6 +83,10 @@ class Game:
 
         return state
 
+    def reset(self):
+        self.state = self.initialize_state()
+        self.is_paused = True
+
     def event_handler(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -79,7 +96,12 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 x, y = mouse_x // self.cell_width, mouse_y // self.cell_height
-                self.state[y][x] = int(not self.state[y][x])
+                self.state[x][y] = int(not self.state[x][y])
+
+            if event.type == pygame.KEYDOWN:
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_SPACE]:
+                    self.is_paused = not self.is_paused
 
 
     def count_neighbours(self, x, y):
@@ -97,30 +119,51 @@ class Game:
 
         return neighbours_count
     
-    def handle_cell(self, x, y):
-        neighbours_count = self.count_neighbours(x, y)
+    def handle_cell(self, i, j):
+        neighbours_count = self.count_neighbours(i, j)
 
         if neighbours_count <= 2:
-            self.state[y][x] = 0
-        elif neighbours_count == 3 and not self.state[y][x]:
-            self.state[y][x] = 1
+            self.state[j][i] = 0
+        elif neighbours_count == 3 and not self.state[j][i]:
+            self.state[j][i] = 1
         elif neighbours_count > 3:
-            self.state[y][x] = 0
+            self.state[j][i] = 0
 
     def update(self):
         for i in range(self.nrows):
             for j in range(self.ncols):
                 self.handle_cell(j, i)
 
+    def draw_cell(self, i, j):
+        x, y = i * self.cell_height, j * self.cell_width
+        color = self.alive_color if self.state[i][j] else self.bg_color
+        cell = pygame.rect.Rect(x, y, self.cell_width, self.cell_height)
+        pygame.draw.rect(self.screen, color=color, rect=cell)
+
+    def draw_paused_screen(self):
+        screen_width, screen_height = pygame.display.get_window_size()
+
+        surf = pygame.Surface((screen_width,screen_height))
+        surf.fill((0, 0,0))
+        surf.set_alpha(200)
+        self.screen.blit(surf, (0, 0))
+        
+        message = "Press [SPACE] to resume"
+        offsetx = len(message) * self.font_size
+        offsety = 50
+        fontx, fonty = (screen_width - offsetx) // 2, screen_height // 2 - offsety
+
+        self.font.render_to(self.screen, (fontx, fonty), message, self.font_color)
+
     def draw(self):
         self.screen.fill(self.settings.bg_color)
 
         for i, row in enumerate(self.state):
             for j, col in enumerate(row):
-                x, y = i * self.cell_height, j * self.cell_width
-                color = self.alive_color if self.state[i][j] else self.bg_color
-                cell = pygame.rect.Rect(x, y, self.cell_width, self.cell_height)
-                pygame.draw.rect(self.screen, color=color, rect=cell)
+                self.draw_cell(i, j)
+
+        if self.is_paused:
+            self.draw_paused_screen()
 
         pygame.display.flip()
 
@@ -129,7 +172,8 @@ class Game:
             self.clock.tick(self.fps)
             self.event_handler()
             self.draw()
-            self.update()
+
+            if not self.is_paused: self.update()
 
 
 if __name__ == "__main__":
