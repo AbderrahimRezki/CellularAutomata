@@ -2,18 +2,18 @@ import sys
 import pygame
 from dataclasses import dataclass
 from random import randint, sample
+from slider import Slider
 
 pygame.init()
 
 @dataclass
 class Settings:
-    window_title: str
+    # window_title: str
 
-    screen_width: int
-    screen_height: int
-
-    nrows: int
-    ncols: int
+    # screen_width: int
+    # screen_height: int
+    # nrows: int
+    # ncols: int
 
     min_per_row: int
     max_per_row: int
@@ -27,32 +27,46 @@ class Settings:
 
     fps: int = 60
     
-    def __post_init__(self):
-        assert self.max_per_row <= self.ncols, "max_per_row can't be greater than grid width."
-        assert self.min_per_row <= self.max_per_row, "min_per_row can't be greater than max_per_row."
+    # def __post_init__(self):
+    #     assert self.max_per_row <= self.ncols, "max_per_row can't be greater than grid width."
+    #     assert self.min_per_row <= self.max_per_row, "min_per_row can't be greater than max_per_row."
 
 
 class Game:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, window_title = "", screen_width = 3000, screen_height = 2000, nrows = 100, ncols = 100):
         self.settings = settings
         self.set_settings(settings=settings)
-        
+
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+
+        self.main_screen_width = self.screen_width * 2 // 3
+        self.main_screen_height = self.screen_height
+
+        self.settings_screen_width = self.screen_width - self.main_screen_width
+        self.settings_screen_height = self.screen_height
+
+        self.nrows = nrows
+        self.ncols = ncols
+
+        self.cell_width = self.main_screen_width // self.ncols
+        self.cell_height = self.main_screen_height // self.nrows
+
+        pygame.display.set_caption(window_title)
+        self.display = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.screen = pygame.Surface((self.main_screen_width, self.main_screen_height))
+        self.settings_screen = pygame.Surface((self.settings_screen_width, self.settings_screen_height))
+        self.min_per_row_slider = Slider((50, 50), (500, 100), self.min_per_row / self.nrows, 0, self.nrows)
+
         self.is_paused = True
+        self.is_drawing = False
         self.clock = pygame.time.Clock()
         self.state = self.initialize_state()
 
+
     def set_settings(self, settings):
-        self.screen_width = settings.screen_width
-        self.screen_height = settings.screen_height
-
-        self.nrows = settings.nrows
-        self.ncols = settings.ncols
-
         self.min_per_row = settings.min_per_row
         self.max_per_row = settings.max_per_row
-
-        self.cell_width = self.screen_width // self.ncols
-        self.cell_height = self.screen_height // self.nrows
 
         self.alive_color = self.settings.alive_color
         self.bg_color = self.settings.bg_color
@@ -62,10 +76,6 @@ class Game:
         self.font_color = settings.font_color
 
         self.fps = settings.fps
-
-        pygame.display.set_caption(settings.window_title)
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
-
 
     def initialize_state(self):
         width = self.ncols
@@ -95,14 +105,22 @@ class Game:
                 sys.exit()
                 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                x, y = mouse_x // self.cell_width, mouse_y // self.cell_height
-                self.state[x][y] = int(not self.state[x][y])
+                self.is_drawing = True
+                # self.is_paused = True
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                self.is_drawing = False
 
             if event.type == pygame.KEYDOWN:
                 keys = pygame.key.get_pressed()
                 if keys[pygame.K_SPACE]:
                     self.is_paused = not self.is_paused
+
+            if self.is_drawing:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                x, y = mouse_x // self.cell_width, mouse_y // self.cell_height
+                try: self.state[x][y] = 1
+                except: pass
 
 
     def count_neighbours(self, x, y):
@@ -142,7 +160,7 @@ class Game:
         pygame.draw.rect(self.screen, color=color, rect=cell)
 
     def draw_paused_screen(self):
-        screen_width, screen_height = pygame.display.get_window_size()
+        screen_width, screen_height = self.screen.get_width(), self.screen.get_height()
 
         surf = pygame.Surface((screen_width,screen_height))
         surf.fill((0, 0,0))
@@ -152,7 +170,7 @@ class Game:
         message = "Press [SPACE] to resume"
         offsetx = len(message) * self.font_size
         offsety = 50
-        fontx, fonty = (screen_width - offsetx) // 2, screen_height // 2 - offsety
+        fontx, fonty = (screen_width  - offsetx) // 2, screen_height // 2 - offsety
 
         self.font.render_to(self.screen, (fontx, fonty), message, self.font_color)
 
@@ -165,6 +183,23 @@ class Game:
 
         if self.is_paused:
             self.draw_paused_screen()
+
+
+        mousex, mousey = pygame.mouse.get_pos()[0] - self.main_screen_width, pygame.mouse.get_pos()[1]
+        self.settings_screen.fill("black")
+
+        if self.min_per_row_slider.container.collidepoint((mousex, mousey)):
+            new_min_per_row = self.min_per_row_slider.move_slider((mousex, mousey))
+
+            if new_min_per_row != self.min_per_row and new_min_per_row <= self.max_per_row: 
+                self.settings.min_per_row = new_min_per_row
+                self.set_settings(self.settings)
+                self.reset()
+
+        self.min_per_row_slider.render(self.settings_screen)
+
+        self.display.blit(self.screen, (0, 0))
+        self.display.blit(self.settings_screen, (self.screen_width * 2 // 3, 0))
 
         pygame.display.flip()
 
@@ -179,9 +214,6 @@ class Game:
 
 if __name__ == "__main__":
     settings = Settings(
-        window_title="The Game of Life",
-        screen_width=2000, screen_height=2000, 
-        nrows=100, ncols=100, 
         min_per_row=10, max_per_row=40,
         fps=5,
         alive_color=(80, 64, 110),
