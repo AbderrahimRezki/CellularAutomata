@@ -35,7 +35,13 @@ class Settings:
 class Game:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.set_settings(settings=settings)
+        
+        self.is_paused = True
+        self.clock = pygame.time.Clock()
+        self.state = self.initialize_state()
 
+    def set_settings(self, settings):
         self.screen_width = settings.screen_width
         self.screen_height = settings.screen_height
 
@@ -53,18 +59,13 @@ class Game:
 
         self.font_size = settings.font_size
         self.font = pygame.freetype.Font(settings.font_path, settings.font_size)
-
         self.font_color = settings.font_color
 
         self.fps = settings.fps
-        self.clock = pygame.time.Clock()
 
-        self.is_paused = True
-
-        self.state = self.initialize_state()
         pygame.display.set_caption(settings.window_title)
-        
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+
 
     def initialize_state(self):
         width = self.ncols
@@ -179,10 +180,10 @@ class Game:
 if __name__ == "__main__":
     settings = Settings(
         window_title="The Game of Life",
-        screen_width=1000, screen_height=1000, 
+        screen_width=2000, screen_height=2000, 
         nrows=100, ncols=100, 
-        min_per_row=20, max_per_row=70,
-        fps=10,
+        min_per_row=10, max_per_row=40,
+        fps=5,
         alive_color=(80, 64, 110),
         bg_color=(216, 209, 232)
     )
